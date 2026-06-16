@@ -1,0 +1,90 @@
+MASTERCARD FRAUD RISK MANAGEMENT POLICY
+=======================================
+Version 3.2 | Internal Reference Document
+
+SECTION 1: TRANSACTION VOLUME THRESHOLDS
+-----------------------------------------
+Normal daily transaction volume is defined as the rolling 30-day average
+for that day-of-week. A spike is declared when:
+  - Volume exceeds 150% of the rolling average (YELLOW alert)
+  - Volume exceeds 200% of the rolling average (RED alert)
+  - Volume exceeds 300% of the rolling average (CRITICAL alert)
+
+When a CRITICAL alert fires, the Fraud Operations team must be notified
+within 30 minutes and an automated investigation must begin immediately.
+
+SECTION 2: HIGH-RISK MERCHANT CATEGORIES
+------------------------------------------
+The following merchant categories are flagged as HIGH RISK and require
+additional scrutiny when transaction volume spikes:
+
+  1. Electronics (MCG 5732, 5734, 5065)
+     - Common in card-not-present fraud
+     - High average ticket value increases financial exposure
+     - Fraudsters often resell electronics for cash
+
+  2. ATM Withdrawals (MCG 6011)
+     - Card skimming attacks frequently target ATM networks
+     - Sudden ATM spike in a region often indicates a compromised batch
+     - Nigerian Prince scams often culminate in ATM withdrawals
+
+  3. Online Retail (MCG 5999)
+     - Account takeover fraud most common here
+     - Shipping address mismatches are a strong signal
+
+  4. Travel (MCG 4722, 3000-3299)
+     - First-party fraud (friendly fraud) is common in travel
+     - Unusual country combinations within 24 hours = velocity fraud
+
+SECTION 3: GEOGRAPHIC RISK TIERS
+----------------------------------
+Countries are classified into three risk tiers based on historical fraud rates:
+
+  TIER 1 (Low Risk): IN, US, GB, DE, AU, SG
+  TIER 2 (Medium Risk): BR, AE, CN
+  TIER 3 (High Risk): NG, and any country not on the approved list
+
+Transactions from Tier 3 countries that also involve HIGH RISK merchant
+categories should be reviewed within 1 hour of detection.
+
+SECTION 4: TIME-OF-DAY PATTERNS
+----------------------------------
+Historical analysis shows that fraudulent transactions cluster in two windows:
+  - Late night  : 01:00 - 04:00 local time (card-not-present fraud peak)
+  - Early morning: 06:00 - 08:00 local time (account takeover peak)
+
+A volume spike during these hours is weighted 2x in the risk score.
+
+SECTION 5: VELOCITY RULES
+---------------------------
+Velocity fraud occurs when a stolen card is used rapidly before the
+victim notices. Our rules trigger on:
+  - More than 3 transactions from the same device in 10 minutes
+  - Transactions in 2+ countries within 4 hours (impossible travel)
+  - Amount escalation: each transaction > 150% of the previous one
+
+SECTION 6: INVESTIGATION ESCALATION PROCEDURE
+----------------------------------------------
+Step 1: Automated detection fires → Investigation Copilot generates report
+Step 2: Report reviewed by Level-1 analyst within 1 hour
+Step 3: If confirmed fraud pattern → freeze affected accounts, escalate to L2
+Step 4: L2 submits SAR (Suspicious Activity Report) within 24 hours
+Step 5: Post-incident review within 72 hours to update ML models
+
+SECTION 7: APPROVED RESPONSE ACTIONS
+--------------------------------------
+The following actions may be taken automatically by the system:
+  - SOFT BLOCK    : Flag future transactions for review (no customer impact)
+  - HARD BLOCK    : Decline all transactions above $X threshold
+  - ACCOUNT FREEZE: Block all activity (requires L2 approval)
+  - SMS ALERT     : Notify cardholder of suspicious activity
+
+SECTION 8: FALSE POSITIVE MANAGEMENT
+--------------------------------------
+Blocking legitimate customers is expensive both financially and reputationally.
+We maintain a false positive budget of no more than 0.5% of total transactions.
+Any model or rule that exceeds this threshold must be reviewed and recalibrated.
+
+If the investigation copilot confidence score is below 70%, the system must
+not take automated action. Instead, the report is queued for human review.
+This is the core principle of our Responsible AI framework.

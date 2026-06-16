@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+data/transactions.db
+models/fraud_model.pkl
+models/encoders.pkl
+rag/tfidf_index.pkl
+reports/
+.env
