@@ -8,6 +8,11 @@ Built as a portfolio project targeting Mastercard's AI Engineer role (Pune, Indi
 
 ---
 
+## Demo
+![Pipeline Output](assets/pipeline_output.png)
+
+---
+
 ## Architecture
 
 ```
@@ -181,4 +186,4 @@ fraudlens/
 ## Author
 
 **Sanchit Kumar Mahto**
-[LinkedIn](https://linkedin.com/in/YOUR_PROFILE) · [GitHub](https://github.com/YOUR_USERNAME)
+[LinkedIn](https://linkedin.com/in/sanchitkrmahto) · [GitHub](https://github.com/sanchy2001)
