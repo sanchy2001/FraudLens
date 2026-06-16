@@ -4,8 +4,6 @@
 > retrieves context from compliance documents, explains root causes with XGBoost + SHAP,
 > and generates executive reports — with built-in hallucination detection.
 
-Built as a portfolio project targeting Mastercard's AI Engineer role (Pune, India).
-
 ---
 
 ## Demo
