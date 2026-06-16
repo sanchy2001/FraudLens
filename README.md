@@ -169,19 +169,8 @@ fraudlens/
 
 ---
 
-## Resume Bullet Points
-
-> Copy these into your resume after building the project:
-
-- Built a 4-agent LangGraph fraud investigation pipeline over synthetic payment data; integrated XGBoost + SHAP for anomaly attribution and a RAG layer for policy-grounded root cause explanations
-- Trained XGBoost classifier on 10,000 synthetic transactions achieving ROC-AUC of 0.9878; used SHAP values to surface top fraud-driving features per investigation
-- Implemented a Responsible AI confidence scoring module that withholds LLM-generated explanations below 70% confidence, preventing hallucinated root causes from entering executive reports
-- Deployed agent pipeline via FastAPI REST API and Streamlit dashboard, containerised with Docker and docker-compose; designed for Azure Container Apps deployment
-- Integrated TF-IDF RAG over internal fraud policy documents to ground LLM explanations in real compliance text, reducing unsupported outputs
-
----
-
 ## Author
 
 **Sanchit Kumar Mahto**
+
 [LinkedIn](https://linkedin.com/in/sanchitkrmahto) · [GitHub](https://github.com/sanchy2001)
