@@ -8,7 +8,7 @@ import random
 random.seed(42)
 np.random.seed(42)
 
-NUM_TRANSACTIONS = 10_000
+NUM_TRANSACTIONS = 100_000
 FRAUD_RATE       = 0.08
 DB_PATH          = os.path.join(os.path.dirname(__file__), "transactions.db")
 

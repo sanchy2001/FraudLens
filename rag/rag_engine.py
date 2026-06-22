@@ -1,20 +1,32 @@
+"""
+rag_engine.py
+-------------
+RAG using FAISS + sentence-transformers (all-MiniLM-L6-v2).
+Replaces TF-IDF with real dense embeddings for better semantic retrieval.
+"""
+
 import os
 import pickle
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import faiss
+from sentence_transformers import SentenceTransformer
 
 DOCS_DIR   = os.path.join(os.path.dirname(__file__), "../docs")
-INDEX_PATH = os.path.join(os.path.dirname(__file__), "tfidf_index.pkl")
+INDEX_PATH = os.path.join(os.path.dirname(__file__), "faiss_index.pkl")
+
+MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 class RAGEngine:
     def __init__(self):
-        self.chunks     = []
-        self.vectorizer = None
-        self.matrix     = None
+        self.chunks    = []
+        self.model     = None
+        self.index     = None  # FAISS index
 
-    def build_index(self):
+    def build_index(self) -> None:
+        print("[RAG] Loading sentence transformer model...")
+        self.model = SentenceTransformer(MODEL_NAME)
+
         raw_chunks = []
         for fname in os.listdir(DOCS_DIR):
             if not fname.endswith(".txt"):
@@ -25,41 +37,60 @@ class RAGEngine:
             raw_chunks.extend(paragraphs)
             print(f"[RAG] Loaded {len(paragraphs)} chunks from {fname}")
 
-        self.chunks     = raw_chunks
-        self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000)
-        self.matrix     = self.vectorizer.fit_transform(self.chunks)
-        print(f"[RAG] Index built: {len(self.chunks)} chunks")
+        self.chunks = raw_chunks
 
-    def save(self):
+        print("[RAG] Generating embeddings...")
+        embeddings = self.model.encode(self.chunks, show_progress_bar=True)
+        embeddings = np.array(embeddings).astype("float32")
+
+        # Normalize for cosine similarity
+        faiss.normalize_L2(embeddings)
+
+        # Build FAISS index
+        dim = embeddings.shape[1]
+        self.index = faiss.IndexFlatIP(dim)  # Inner product = cosine after normalize
+        self.index.add(embeddings)
+
+        print(f"[RAG] FAISS index built: {len(self.chunks)} chunks, dim={dim}")
+
+    def save(self) -> None:
         with open(INDEX_PATH, "wb") as f:
             pickle.dump({
-                "chunks"    : self.chunks,
-                "vectorizer": self.vectorizer,
-                "matrix"    : self.matrix
+                "chunks": self.chunks,
+                "index" : faiss.serialize_index(self.index),
+                "model_name": MODEL_NAME,
             }, f)
         print(f"[RAG] Saved → {INDEX_PATH}")
 
-    def load(self):
+    def load(self) -> bool:
         if not os.path.exists(INDEX_PATH):
             return False
+        print("[RAG] Loading FAISS index...")
         with open(INDEX_PATH, "rb") as f:
             d = pickle.load(f)
-        self.chunks     = d["chunks"]
-        self.vectorizer = d["vectorizer"]
-        self.matrix     = d["matrix"]
+        self.chunks = d["chunks"]
+        self.index  = faiss.deserialize_index(d["index"])
+        self.model  = SentenceTransformer(d.get("model_name", MODEL_NAME))
         print(f"[RAG] Loaded ({len(self.chunks)} chunks)")
         return True
 
-    def retrieve(self, query, top_k=4):
-        q_vec  = self.vectorizer.transform([query])
-        scores = cosine_similarity(q_vec, self.matrix).flatten()
-        top_idx = scores.argsort()[-top_k:][::-1]
-        return [self.chunks[i] for i in top_idx if scores[i] > 0.05]
+    def retrieve(self, query: str, top_k: int = 4) -> list[str]:
+        q_vec = self.model.encode([query])
+        q_vec = np.array(q_vec).astype("float32")
+        faiss.normalize_L2(q_vec)
+
+        scores, indices = self.index.search(q_vec, top_k)
+        results = []
+        for score, idx in zip(scores[0], indices[0]):
+            if idx != -1 and score > 0.1:
+                results.append(self.chunks[idx])
+        return results
 
 
-_rag = None
+_rag: RAGEngine | None = None
 
-def get_rag():
+
+def get_rag() -> RAGEngine:
     global _rag
     if _rag is None:
         _rag = RAGEngine()
