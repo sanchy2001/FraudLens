@@ -1,153 +1,132 @@
 """
-app.py — FraudLens Streamlit Dashboard
----------------------------------------
-Run with:  streamlit run dashboard/app.py
-This gives you a visual interface to:
-  - Ask fraud investigation questions
-  - See all four agents running live
-  - View charts and anomaly breakdowns
-  - Download the executive PDF report
+app.py — Streamlit Dashboard for FraudLens
+-------------------------------------------
+Run with: streamlit run dashboard/app.py
 """
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 import pandas as pd
 import sqlite3
-import json
+import plotly.express as px
 from datetime import datetime, timedelta
 from pipeline import run_investigation
 
 st.set_page_config(
-    page_title = "FraudLens — Fraud Investigation Copilot",
-    page_icon  = "🔍",
-    layout     = "wide"
+    page_title="FraudLens",
+    page_icon="🔍",
+    layout="wide"
 )
 
-# ── Header ────────────────────────────────────────────────────────────────
-st.markdown("""
-<h1 style='color:#EB001B; margin-bottom:0'>🔍 FraudLens</h1>
-<p style='color:#888; font-size:16px; margin-top:4px'>
-  Financial Fraud Investigation Copilot — Powered by LangGraph · XGBoost · RAG
-</p>
-<hr style='border-color:#eee'>
-""", unsafe_allow_html=True)
+st.title("🔍 FraudLens — Fraud Investigation Copilot")
+st.caption("Multi-agent AI system for payment anomaly detection and executive reporting")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### Ask a question")
-    query = st.text_area(
-        "Investigation query",
-        value="Why was transaction volume high yesterday?",
-        height=100
+    st.header("Investigation Controls")
+    query = st.text_input(
+        "Investigation Query",
+        value="Why was transaction volume high yesterday?"
     )
-    run_btn = st.button("🚀 Run Investigation", type="primary", use_container_width=True)
+    run_btn = st.button("🚀 Run Investigation", type="primary")
+    st.divider()
+    st.caption("FraudLens v1.0 | LangGraph + XGBoost + FAISS + Groq")
 
-    st.markdown("---")
-    st.markdown("**Tech Stack**")
-    st.markdown("""
-- 🔗 LangGraph (agent orchestration)
-- 🌲 XGBoost + SHAP (anomaly detection)
-- 📚 RAG + FAISS (policy retrieval)
-- 🐍 Python + SQL + FastAPI
-- 🐳 Docker ready
-""")
+# ── Load transaction data for charts ─────────────────────────────────────
+@st.cache_data
+def load_data():
+    db_path = os.path.join(os.path.dirname(__file__), "../data/transactions.db")
+    conn = sqlite3.connect(db_path)
+    df = pd.read_sql("""
+        SELECT date, COUNT(*) as txn_count,
+               SUM(is_fraud) as fraud_count,
+               AVG(amount_usd) as avg_amount
+        FROM transactions
+        GROUP BY date ORDER BY date
+    """, conn)
+    conn.close()
+    return df
 
-# ── Main area ─────────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "../data/transactions.db")
+df = load_data()
 
-# Show existing data at a glance
-conn = sqlite3.connect(DB_PATH)
-daily_df = pd.read_sql("""
-    SELECT date, COUNT(*) as txn_count, SUM(is_fraud) as fraud_count
-    FROM transactions
-    GROUP BY date ORDER BY date DESC LIMIT 14
-""", conn)
-conn.close()
+# ── Transaction volume chart ──────────────────────────────────────────────
+st.subheader("📊 Transaction Volume (Last 30 Days)")
+fig = px.bar(
+    df.tail(30), x="date", y="txn_count",
+    color="fraud_count",
+    color_continuous_scale="Reds",
+    labels={"txn_count": "Transactions", "fraud_count": "Fraud Count"},
+)
+fig.update_layout(height=300, margin=dict(t=20, b=20))
+st.plotly_chart(fig, use_container_width=True)
 
-col1, col2, col3, col4 = st.columns(4)
-yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-yest_row  = daily_df[daily_df["date"] == yesterday]
-yest_count = int(yest_row["txn_count"].iloc[0]) if len(yest_row) else 0
-baseline   = daily_df[daily_df["date"] != yesterday]["txn_count"].mean()
-
-col1.metric("Yesterday's transactions", f"{yest_count:,}", f"+{yest_count - baseline:.0f} vs avg")
-col2.metric("30-day daily average",     f"{baseline:.0f}")
-col3.metric("Spike ratio",              f"{yest_count/baseline:.1f}x" if baseline else "N/A")
-col4.metric("Total records in DB",      f"{daily_df['txn_count'].sum():,}")
-
-# Volume chart
-st.markdown("#### Transaction volume — last 14 days")
-chart_df = daily_df.sort_values("date").set_index("date")
-st.bar_chart(chart_df["txn_count"])
-
-# Run pipeline
+# ── Run investigation ─────────────────────────────────────────────────────
 if run_btn:
-    st.markdown("---")
-    st.markdown("### 🤖 Agent Pipeline Running...")
+    with st.spinner("🤖 Agents running investigation..."):
+        state = run_investigation(query)
 
-    progress   = st.progress(0)
-    status_box = st.empty()
+    anomalies   = state["anomalies"]
+    raw_data    = state["raw_data"]
+    explanation = state["explanation"]
 
-    with st.spinner("Agent 1: Pulling transaction data..."):
-        status_box.info("**Agent 1** — Data Ingestion: querying database...")
-        import time; time.sleep(0.3)
+    # ── Alert banner ──────────────────────────────────────────────────────
+    alert = anomalies["alert_level"]
+    color_map = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+    st.subheader(f"{color_map.get(alert, '⚪')} Alert Level: {alert}")
 
-    # Actually run the pipeline
-    with st.spinner("Running full investigation..."):
-        result = run_investigation(query)
-    progress.progress(100)
+    # ── Key metrics ───────────────────────────────────────────────────────
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Transactions Yesterday", f"{raw_data['txn_count']:,}")
+    col2.metric("Spike Ratio", f"{raw_data['spike_ratio']}x")
+    col3.metric("Flagged Transactions", anomalies["flagged_count"])
+    col4.metric("Model Confidence", f"{anomalies['confidence_score']:.1%}")
 
-    # ── Results ───────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 📊 Investigation Results")
+    st.divider()
 
-    raw       = result.get("raw_data", {})
-    anomalies = result.get("anomalies", {})
-    alert     = anomalies.get("alert_level", "UNKNOWN")
+    # ── SHAP feature importance ───────────────────────────────────────────
+    col_left, col_right = st.columns(2)
 
-    alert_colors = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
-    st.markdown(f"## {alert_colors.get(alert,'⚪')} Alert Level: **{alert}**")
+    with col_left:
+        st.subheader("🎯 SHAP Feature Importance")
+        shap_df = pd.DataFrame(
+            list(anomalies["feature_importance"].items()),
+            columns=["Feature", "SHAP Value"]
+        )
+        fig2 = px.bar(
+            shap_df, x="SHAP Value", y="Feature",
+            orientation="h", color="SHAP Value",
+            color_continuous_scale="Reds"
+        )
+        fig2.update_layout(height=300, margin=dict(t=20, b=20))
+        st.plotly_chart(fig2, use_container_width=True)
 
-    # Metrics row
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Transactions", f"{raw.get('txn_count',0):,}")
-    m2.metric("Spike ratio",  f"{raw.get('spike_ratio',0)}x")
-    m3.metric("Flagged",      f"{anomalies.get('flagged_count',0)}")
-    m4.metric("Confidence",   f"{anomalies.get('confidence_score',0):.1%}")
+    with col_right:
+        st.subheader("🏪 Top Suspicious Merchants")
+        merchant_df = pd.DataFrame([
+            {"Merchant": m, "Flagged": d["flagged_count"], "Avg Score": round(d["avg_score"], 2)}
+            for m, d in anomalies["top_risky_merchants"].items()
+        ])
+        st.dataframe(merchant_df, use_container_width=True, hide_index=True)
 
-    # Feature importance
-    st.markdown("#### 🎯 SHAP Feature Importance")
-    fi = anomalies.get("feature_importance", {})
-    if fi:
-        fi_df = pd.DataFrame(list(fi.items()), columns=["Feature", "SHAP Importance"])
-        st.bar_chart(fi_df.set_index("Feature"))
+    st.divider()
 
-    # Root cause
-    st.markdown("#### 🧠 Root Cause Explanation")
-    explanation = result.get("explanation", "")
-    if result.get("human_review"):
+    # ── Root cause explanation ────────────────────────────────────────────
+    st.subheader("🧠 Root Cause Analysis")
+    if state.get("human_review"):
         st.warning(explanation)
     else:
         st.info(explanation)
 
-    # Agent log
-    with st.expander("📋 Agent Pipeline Log"):
-        for msg in result.get("messages", []):
-            st.markdown(f"**{msg['agent']}**")
-            st.markdown(f"> {msg['summary']}")
-            st.markdown("---")
-
-    # PDF download
-    report_path = result.get("report_path", "")
+    # ── Report download ───────────────────────────────────────────────────
+    report_path = state.get("report_path", "")
     if report_path and os.path.exists(report_path):
         with open(report_path, "rb") as f:
             st.download_button(
-                label     = "📥 Download Executive PDF Report",
-                data      = f,
-                file_name = os.path.basename(report_path),
-                mime      = "application/pdf",
-                type      = "primary"
+                label="📄 Download Executive PDF Report",
+                data=f,
+                file_name=os.path.basename(report_path),
+                mime="application/pdf"
             )
